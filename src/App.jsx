@@ -1,131 +1,107 @@
 import Loader from 'react-loader-spinner';
 import toast, { Toaster } from 'react-hot-toast';
 
-import { Component } from 'react';
-import galleryApi from './services/galleryApi';
+import { useState, useEffect } from 'react';
+import galleryApi, { PER_PAGE } from './services/galleryApi';
 
 import { Searchbar } from './components/Searchbar/Searchbar';
 import { ImageGallery } from './components/ImageGallery/ImageGallery';
 import { Button } from './components/Button/Button';
-import { Modal } from './components/Modal/Modal';
+import Modal from './components/Modal/Modal';
 
 import { WrapperLoader, MyApp } from './App.styled';
 
-export class App extends Component {
-  state = {
-    imagesList: [],
-    searchQuery: '',
-    numberPage: 1,
-    showModal: null,
-    imgUrl: '',
-    requestStatus: 'idle',
-    // idle, pending, resolved, rejected,
-  };
+export default function App() {
+  const [imagesList, setImagesList] = useState([]);
+  const [searchQuery, setSearchQuery] = useState(null);
+  const [numberPage, setNumberPage] = useState(1);
+  const [showModal, setShowModal] = useState(null);
+  const [imgUrl, setImgUrl] = useState('');
+  const [requestStatus, setRequestStatus] = useState('idle');
 
-  componentDidUpdate(_, prevState) {
-    const { searchQuery, imagesList } = this.state;
+  useEffect(() => {
+    if (!searchQuery) return;
+    setRequestStatus('pending');
 
-    if (prevState.searchQuery !== searchQuery) {
-      this.setState({ imagesList: [], numberPage: 1 });
-      this.handleSearch();
-    }
-    if (
-      prevState.imagesList !== imagesList &&
-      prevState.imagesList.length !== 0
-    ) {
-      this.handleScroll();
-    }
-  }
+    galleryApi.fetchGalleryWithQuery(searchQuery, numberPage).then(data => {
+      if (data.length === 0 && numberPage === 1) {
+        toast.error('Nothing found');
+        setRequestStatus('idle');
+        return;
+      }
 
-  handleSubmit = searchQuery => {
+      if (data.length === 0 && numberPage > 1) {
+        toast.error('End of image list');
+        setRequestStatus('idle');
+        return;
+      }
+
+      const images = data.map(({ id, webformatURL, largeImageURL }) => ({
+        id,
+        webformatURL,
+        largeImageURL,
+      }));
+
+      setImagesList(prev => [...prev, ...images]);
+      setRequestStatus('resolved');
+    });
+  }, [numberPage, searchQuery]);
+
+  useEffect(() => {
+    if (imagesList.length <= PER_PAGE) return;
+    handleScroll();
+  }, [imagesList]);
+
+  const handleSubmit = searchQuery => {
     if (searchQuery.trim() !== '') {
-      this.setState({ searchQuery });
+      setNumberPage(1);
+      setImagesList([]);
+      setSearchQuery(searchQuery);
       return;
     }
     toast.error('Invalid request');
   };
 
-  handleSearch = () => {
-    const { searchQuery, numberPage } = this.state;
-    this.setState({ requestStatus: 'pending' });
-
-    galleryApi
-      .fetchGalleryWithQuery(searchQuery, numberPage)
-      .then(imagesData => this.handleSearchData(imagesData));
-  };
-
-  handleSearchData = data => {
-    const { numberPage } = this.state;
-
-    if (data.length === 0 && numberPage === 1) {
-      toast.error('Nothing found');
-      this.setState({ requestStatus: 'idle' });
-      return;
-    }
-
-    if (data.length === 0 && numberPage > 1) {
-      toast.error('End of image list');
-      this.setState({ requestStatus: 'idle' });
-      return;
-    }
-
-    const images = data.map(({ id, webformatURL, largeImageURL }) => ({
-      id,
-      webformatURL,
-      largeImageURL,
-    }));
-
-    this.setState(prevState => ({
-      imagesList: [...prevState.imagesList, ...images],
-      numberPage: prevState.numberPage + 1,
-      requestStatus: 'resolved',
-    }));
-  };
-
-  handleScroll = () => {
+  const handleScroll = () => {
     window.scrollTo({
       top: document.documentElement.scrollHeight,
       behavior: 'smooth',
     });
   };
 
-  toggleModal = e => {
+  const toggleModal = e => {
     if (e.target === e.currentTarget || e.code === 'Escape') {
-      this.setState(({ showModal }) => ({ showModal: !showModal }));
+      setShowModal(prev => !prev);
     }
   };
 
-  handleClickImages = (e, url) => {
-    this.setState({ imgUrl: url });
-    this.toggleModal(e);
+  const handleClickImages = (e, url) => {
+    setImgUrl(url);
+    toggleModal(e);
   };
 
-  render() {
-    const { imagesList, searchQuery, requestStatus, showModal, imgUrl } =
-      this.state;
-    return (
-      <MyApp>
-        <Searchbar onSubmit={this.handleSubmit} />
-        {imagesList.length > 0 && (
-          <ImageGallery
-            imagesList={imagesList}
-            alt={searchQuery}
-            handleClick={this.handleClickImages}
-          />
-        )}
-        {requestStatus === 'pending' && (
-          <WrapperLoader>
-            <Loader type="ThreeDots" color="#00BFFF" height={100} width={100} />
-          </WrapperLoader>
-        )}
-        {requestStatus === 'resolved' && <Button onClick={this.handleSearch} />}
-        {showModal && (
-          <Modal alt={searchQuery} url={imgUrl} closeModal={this.toggleModal} />
-        )}
-        <Toaster />
-      </MyApp>
-    );
-  }
+  return (
+    <MyApp>
+      <Searchbar onSubmit={handleSubmit} />
+      {imagesList.length > 0 && (
+        <ImageGallery
+          imagesList={imagesList}
+          alt={searchQuery}
+          handleClick={handleClickImages}
+        />
+      )}
+      {requestStatus === 'pending' && (
+        <WrapperLoader>
+          <Loader type="ThreeDots" color="#00BFFF" height={100} width={100} />
+        </WrapperLoader>
+      )}
+      {requestStatus === 'resolved' && (
+        <Button onClick={() => setNumberPage(prev => prev + 1)} />
+      )}
+      {showModal && (
+        <Modal alt={searchQuery} url={imgUrl} closeModal={toggleModal} />
+      )}
+      <Toaster />
+    </MyApp>
+  );
 }
-
-export default App;
