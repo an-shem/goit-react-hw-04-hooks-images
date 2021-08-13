@@ -52,14 +52,20 @@ export default function App() {
     handleScroll();
   }, [imagesList]);
 
-  const handleSubmit = searchQuery => {
-    if (searchQuery.trim() !== '') {
-      setNumberPage(1);
-      setImagesList([]);
-      setSearchQuery(searchQuery);
+  const handleSubmit = searchQueryFromSubmit => {
+    if (searchQueryFromSubmit.trim() === '') {
+      toast.error('Invalid request');
       return;
     }
-    toast.error('Invalid request');
+    if (searchQueryFromSubmit === searchQuery) {
+      toast.error('Repeated request');
+      return;
+    }
+
+    setNumberPage(1);
+    setImagesList([]);
+    setSearchQuery(searchQueryFromSubmit);
+    return;
   };
 
   const handleScroll = () => {
